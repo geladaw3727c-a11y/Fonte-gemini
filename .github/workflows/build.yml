@@ -1,0 +1,792 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Criar arquivos do app
+        run: |
+          mkdir -p .
+          cat > settings.gradle.kts <<'EOF'
+          pluginManagement {
+              repositories { google(); mavenCentral(); gradlePluginPortal() }
+          }
+          dependencyResolutionManagement {
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "GeminiFontPlus"
+          include(":app")
+          EOF
+          mkdir -p .
+          cat > build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application") version "8.5.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.24" apply false
+          }
+          EOF
+          mkdir -p .
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          EOF
+          mkdir -p app
+          cat > app/build.gradle.kts <<'EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.geminifontplus"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.geminifontplus"
+                  minSdk = 26
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release { isMinifyEnabled = false }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.13.1")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+              implementation("com.google.android.material:material:1.12.0")
+          }
+          EOF
+          mkdir -p app/src/main
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <application
+                  android:allowBackup="false"
+                  android:icon="@drawable/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.GeminiFontPlus">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <service
+                      android:name=".FontPlusService"
+                      android:exported="true"
+                      android:label="@string/app_name"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+                      <intent-filter>
+                          <action android:name="android.accessibilityservice.AccessibilityService" />
+                      </intent-filter>
+                      <meta-data
+                          android:name="android.accessibilityservice"
+                          android:resource="@xml/accessibility_service_config" />
+                  </service>
+              </application>
+          </manifest>
+          EOF
+          mkdir -p app/src/main/res/xml
+          cat > app/src/main/res/xml/accessibility_service_config.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowContentChanged|typeWindowStateChanged|typeViewScrolled"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+              android:canRetrieveWindowContent="true"
+              android:description="@string/service_desc"
+              android:notificationTimeout="50" />
+          EOF
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+              <string name="app_name">Gemini Font+</string>
+              <string name="service_desc">Lê os textos na tela do Google (Circle to Search / Lens), Gemini e Chrome apenas para ampliar as traduções. Nada é gravado nem enviado.</string>
+          </resources>
+          EOF
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/colors.xml <<'EOF'
+          <resources>
+              <color name="bg">#F6F8FC</color>
+              <color name="card">#FFFFFF</color>
+              <color name="primary">#1A73E8</color>
+              <color name="ok">#188038</color>
+              <color name="bad">#C5221F</color>
+              <color name="text">#1F1F1F</color>
+              <color name="muted">#5F6368</color>
+          </resources>
+          EOF
+          mkdir -p app/src/main/res/values
+          cat > app/src/main/res/values/themes.xml <<'EOF'
+          <resources>
+              <style name="Theme.GeminiFontPlus" parent="Theme.Material3.Light.NoActionBar">
+                  <item name="colorPrimary">@color/primary</item>
+                  <item name="android:windowBackground">@color/bg</item>
+                  <item name="android:statusBarColor">@color/bg</item>
+                  <item name="android:windowLightStatusBar">true</item>
+              </style>
+          </resources>
+          EOF
+          mkdir -p app/src/main/res/drawable
+          cat > app/src/main/res/drawable/ic_launcher.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp" android:height="108dp"
+              android:viewportWidth="108" android:viewportHeight="108">
+              <path android:fillColor="#1A73E8" android:pathData="M0,0h108v108h-108z"/>
+              <path android:fillColor="#FFFFFF" android:fillType="evenOdd"
+                  android:pathData="M24,80 L44,28 L58,28 L78,80 L67,80 L63,69 L39,69 L35,80 Z M42,60 L60,60 L51,36 Z"/>
+              <path android:fillColor="#FFFFFF"
+                  android:pathData="M78,18h6v8h8v6h-8v8h-6v-8h-8v-6h8z"/>
+          </vector>
+          EOF
+          mkdir -p app/src/main/res/layout
+          cat > app/src/main/res/layout/activity_main.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:fillViewport="true">
+
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="vertical"
+                  android:padding="16dp">
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="Gemini Font+"
+                      android:textColor="@color/text"
+                      android:textSize="28sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:id="@+id/tvStatus"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="4dp"
+                      android:textSize="15sp" />
+
+                  <com.google.android.material.card.MaterialCardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="16dp"
+                      app:cardBackgroundColor="@color/card"
+                      app:cardCornerRadius="24dp"
+                      app:cardElevation="0dp">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:gravity="center_horizontal"
+                          android:orientation="vertical"
+                          android:padding="20dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Tamanho da tradução"
+                              android:textColor="@color/muted"
+                              android:textSize="14sp" />
+
+                          <TextView
+                              android:id="@+id/tvPercent"
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:textColor="@color/primary"
+                              android:textSize="48sp"
+                              android:textStyle="bold" />
+
+                          <LinearLayout
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="8dp"
+                              android:orientation="horizontal">
+
+                              <com.google.android.material.button.MaterialButton
+                                  android:id="@+id/btnMinus"
+                                  android:layout_width="0dp"
+                                  android:layout_height="72dp"
+                                  android:layout_marginEnd="8dp"
+                                  android:layout_weight="1"
+                                  android:text="−"
+                                  android:textSize="32sp"
+                                  app:cornerRadius="20dp" />
+
+                              <com.google.android.material.button.MaterialButton
+                                  android:id="@+id/btnPlus"
+                                  android:layout_width="0dp"
+                                  android:layout_height="72dp"
+                                  android:layout_marginStart="8dp"
+                                  android:layout_weight="1"
+                                  android:text="+"
+                                  android:textSize="32sp"
+                                  app:cornerRadius="20dp" />
+                          </LinearLayout>
+                      </LinearLayout>
+                  </com.google.android.material.card.MaterialCardView>
+
+                  <com.google.android.material.card.MaterialCardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="12dp"
+                      app:cardBackgroundColor="@color/card"
+                      app:cardCornerRadius="24dp"
+                      app:cardElevation="0dp">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="20dp">
+
+                          <TextView
+                              android:layout_width="wrap_content"
+                              android:layout_height="wrap_content"
+                              android:text="Pré-visualização"
+                              android:textColor="@color/muted"
+                              android:textSize="14sp" />
+
+                          <TextView
+                              android:id="@+id/tvPreview"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:layout_marginTop="8dp"
+                              android:text="Sim, também nos estabeleceremos no Templo da Montanha no futuro."
+                              android:textColor="@color/text" />
+                      </LinearLayout>
+                  </com.google.android.material.card.MaterialCardView>
+
+                  <com.google.android.material.card.MaterialCardView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="12dp"
+                      app:cardBackgroundColor="@color/card"
+                      app:cardCornerRadius="24dp"
+                      app:cardElevation="0dp">
+
+                      <LinearLayout
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:orientation="vertical"
+                          android:padding="20dp">
+
+                          <com.google.android.material.materialswitch.MaterialSwitch
+                              android:id="@+id/swEnabled"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:text="Ampliação ativada" />
+
+                          <com.google.android.material.materialswitch.MaterialSwitch
+                              android:id="@+id/swGoogle"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:text="App Google (Circle to Search / Lens)" />
+
+                          <com.google.android.material.materialswitch.MaterialSwitch
+                              android:id="@+id/swGemini"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:text="App Gemini (experimental)" />
+
+                          <com.google.android.material.materialswitch.MaterialSwitch
+                              android:id="@+id/swChrome"
+                              android:layout_width="match_parent"
+                              android:layout_height="wrap_content"
+                              android:text="Chrome (experimental)" />
+                      </LinearLayout>
+                  </com.google.android.material.card.MaterialCardView>
+
+                  <com.google.android.material.button.MaterialButton
+                      android:id="@+id/btnAccess"
+                      android:layout_width="match_parent"
+                      android:layout_height="60dp"
+                      android:layout_marginTop="16dp"
+                      android:text="Abrir configurações de acessibilidade"
+                      app:cornerRadius="20dp" />
+
+                  <com.google.android.material.button.MaterialButton
+                      android:id="@+id/btnDiag"
+                      style="@style/Widget.Material3.Button.TonalButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="56dp"
+                      android:layout_marginTop="8dp"
+                      android:text="Diagnóstico (o que o app enxerga)"
+                      app:cornerRadius="20dp" />
+
+                  <com.google.android.material.button.MaterialButton
+                      android:id="@+id/btnReset"
+                      style="@style/Widget.Material3.Button.TextButton"
+                      android:layout_width="match_parent"
+                      android:layout_height="56dp"
+                      android:text="Restaurar 100%" />
+
+                  <TextView
+                      android:id="@+id/tvVersion"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="8dp"
+                      android:gravity="center"
+                      android:textColor="@color/muted"
+                      android:textSize="12sp" />
+              </LinearLayout>
+          </ScrollView>
+          EOF
+          mkdir -p app/src/main/java/com/geminifontplus
+          cat > app/src/main/java/com/geminifontplus/Prefs.kt <<'EOF'
+          package com.geminifontplus
+
+          import android.content.Context
+          import android.content.SharedPreferences
+
+          object Prefs {
+              const val FILE = "gemini_font_plus"
+              const val K_PERCENT = "percent"
+              const val K_ENABLED = "enabled"
+              const val K_GOOGLE = "t_google"
+              const val K_GEMINI = "t_gemini"
+              const val K_CHROME = "t_chrome"
+
+              fun sp(c: Context): SharedPreferences = c.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+              fun percent(c: Context) = sp(c).getInt(K_PERCENT, 200)
+              fun setPercent(c: Context, v: Int) = sp(c).edit().putInt(K_PERCENT, v.coerceIn(100, 500)).apply()
+
+              fun bool(c: Context, key: String) = sp(c).getBoolean(key, true)
+              fun setBool(c: Context, key: String, v: Boolean) = sp(c).edit().putBoolean(key, v).apply()
+          }
+          EOF
+          mkdir -p app/src/main/java/com/geminifontplus
+          cat > app/src/main/java/com/geminifontplus/MainActivity.kt <<'EOF'
+          package com.geminifontplus
+
+          import android.content.ClipData
+          import android.content.ClipboardManager
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.Color
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.util.TypedValue
+          import android.widget.TextView
+          import android.widget.Toast
+          import androidx.appcompat.app.AppCompatActivity
+          import com.google.android.material.button.MaterialButton
+          import com.google.android.material.dialog.MaterialAlertDialogBuilder
+          import com.google.android.material.materialswitch.MaterialSwitch
+
+          class MainActivity : AppCompatActivity() {
+
+              private lateinit var tvStatus: TextView
+              private lateinit var tvPercent: TextView
+              private lateinit var tvPreview: TextView
+              private lateinit var btnMinus: MaterialButton
+              private lateinit var btnPlus: MaterialButton
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_main)
+
+                  tvStatus = findViewById(R.id.tvStatus)
+                  tvPercent = findViewById(R.id.tvPercent)
+                  tvPreview = findViewById(R.id.tvPreview)
+                  btnMinus = findViewById(R.id.btnMinus)
+                  btnPlus = findViewById(R.id.btnPlus)
+
+                  btnMinus.setOnClickListener { step(-50) }
+                  btnPlus.setOnClickListener { step(50) }
+
+                  bindSwitch(R.id.swEnabled, "enabled")
+                  bindSwitch(R.id.swGoogle, Prefs.K_GOOGLE)
+                  bindSwitch(R.id.swGemini, Prefs.K_GEMINI)
+                  bindSwitch(R.id.swChrome, Prefs.K_CHROME)
+
+                  findViewById<MaterialButton>(R.id.btnAccess).setOnClickListener {
+                      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                  }
+                  findViewById<MaterialButton>(R.id.btnReset).setOnClickListener {
+                      Prefs.setPercent(this, 100)
+                      render()
+                  }
+                  findViewById<MaterialButton>(R.id.btnDiag).setOnClickListener { showDiag() }
+
+                  val v = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
+                  findViewById<TextView>(R.id.tvVersion).text = "Versão $v • tudo fica salvo só neste aparelho"
+                  render()
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  updateStatus()
+              }
+
+              private fun bindSwitch(id: Int, key: String) {
+                  val sw = findViewById<MaterialSwitch>(id)
+                  val k = if (key == "enabled") Prefs.K_ENABLED else key
+                  sw.isChecked = Prefs.bool(this, k)
+                  sw.setOnCheckedChangeListener { _, checked ->
+                      Prefs.setBool(this, k, checked)
+                      updateStatus()
+                  }
+              }
+
+              private fun step(d: Int) {
+                  Prefs.setPercent(this, Prefs.percent(this) + d)
+                  render()
+              }
+
+              private fun render() {
+                  val p = Prefs.percent(this)
+                  tvPercent.text = "$p%"
+                  tvPreview.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f * p / 100f)
+                  btnMinus.isEnabled = p > 100
+                  btnPlus.isEnabled = p < 500
+              }
+
+              private fun serviceOn(): Boolean {
+                  val s = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+                  return s.contains(packageName) && s.contains("FontPlusService")
+              }
+
+              private fun updateStatus() {
+                  val on = serviceOn()
+                  val enabled = Prefs.bool(this, Prefs.K_ENABLED)
+                  when {
+                      !on -> {
+                          tvStatus.text = "● Serviço de acessibilidade desligado. Toque no botão abaixo e ative “Gemini Font+”."
+                          tvStatus.setTextColor(getColor(R.color.bad))
+                      }
+                      !enabled -> {
+                          tvStatus.text = "● Serviço ligado, ampliação pausada."
+                          tvStatus.setTextColor(Color.parseColor("#B06000"))
+                      }
+                      else -> {
+                          tvStatus.text = "● Funcionando. Abra o Google/Gemini e traduza."
+                          tvStatus.setTextColor(getColor(R.color.ok))
+                      }
+                  }
+              }
+
+              private fun showDiag() {
+                  val text = FontPlusService.lastDump.ifBlank {
+                      "Nada capturado ainda.\n\n1) Ative o serviço de acessibilidade.\n2) Abra a tradução (Circle to Search/Gemini).\n3) Volte aqui e abra o Diagnóstico."
+                  }
+                  MaterialAlertDialogBuilder(this)
+                      .setTitle("O que o app enxerga")
+                      .setMessage(text)
+                      .setPositiveButton("Copiar") { _, _ ->
+                          val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                          cm.setPrimaryClip(ClipData.newPlainText("diagnostico", text))
+                          Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+                      }
+                      .setNegativeButton("Fechar", null)
+                      .show()
+              }
+          }
+          EOF
+          mkdir -p app/src/main/java/com/geminifontplus
+          cat > app/src/main/java/com/geminifontplus/FontPlusService.kt <<'EOF'
+          package com.geminifontplus
+
+          import android.accessibilityservice.AccessibilityService
+          import android.content.SharedPreferences
+          import android.graphics.Color
+          import android.graphics.PixelFormat
+          import android.graphics.Rect
+          import android.graphics.drawable.GradientDrawable
+          import android.os.Build
+          import android.os.Handler
+          import android.os.Looper
+          import android.text.Layout
+          import android.text.StaticLayout
+          import android.text.TextPaint
+          import android.util.TypedValue
+          import android.view.Gravity
+          import android.view.View
+          import android.view.ViewGroup
+          import android.view.WindowManager
+          import android.view.accessibility.AccessibilityEvent
+          import android.view.accessibility.AccessibilityNodeInfo
+          import android.widget.FrameLayout
+          import android.widget.TextView
+          import kotlin.math.max
+          import kotlin.math.min
+
+          class FontPlusService : AccessibilityService() {
+
+              private data class Cand(val text: String, val rect: Rect, val pkg: String)
+
+              private class Ctx(val sw: Int, val sh: Int, val pkg: String) {
+                  val out = ArrayList<Cand>()
+                  val dump = StringBuilder()
+                  var markerLeft = 0
+                  var lines = 0
+              }
+
+              companion object {
+                  const val PKG_GOOGLE = "com.google.android.googlequicksearchbox"
+                  const val PKG_GEMINI = "com.google.android.apps.bard"
+                  const val PKG_CHROME = "com.android.chrome"
+                  @Volatile var lastDump: String = ""
+                  private val MARKER = Regex("(?i)^\\s*(tradu(ção|zido|zir|ções)|translat(ion|ed|e)).{0,40}$")
+              }
+
+              private val handler = Handler(Looper.getMainLooper())
+              private val refreshRunnable = Runnable { refresh() }
+              private var wm: WindowManager? = null
+              private var overlay: FrameLayout? = null
+              private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> schedule() }
+
+              override fun onServiceConnected() {
+                  super.onServiceConnected()
+                  wm = getSystemService(WINDOW_SERVICE) as WindowManager
+                  Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefListener)
+                  ensureOverlay()
+              }
+
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  val e = event ?: return
+                  val p = e.packageName?.toString()
+                  if (p == packageName) return
+                  val showing = (overlay?.childCount ?: 0) > 0
+                  if (!showing && p !in allowedPackages()) return
+                  schedule()
+              }
+
+              override fun onInterrupt() {}
+
+              override fun onDestroy() {
+                  handler.removeCallbacksAndMessages(null)
+                  try { Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefListener) } catch (_: Exception) {}
+                  try { overlay?.let { wm?.removeView(it) } } catch (_: Exception) {}
+                  overlay = null
+                  super.onDestroy()
+              }
+
+              private fun schedule() {
+                  handler.removeCallbacks(refreshRunnable)
+                  handler.postDelayed(refreshRunnable, 150)
+              }
+
+              private fun allowedPackages(): Set<String> {
+                  val s = HashSet<String>()
+                  if (!Prefs.bool(this, Prefs.K_ENABLED)) return s
+                  if (Prefs.bool(this, Prefs.K_GOOGLE)) s.add(PKG_GOOGLE)
+                  if (Prefs.bool(this, Prefs.K_GEMINI)) s.add(PKG_GEMINI)
+                  if (Prefs.bool(this, Prefs.K_CHROME)) s.add(PKG_CHROME)
+                  return s
+              }
+
+              private fun ensureOverlay(): FrameLayout {
+                  overlay?.let { return it }
+                  val f = FrameLayout(this)
+                  f.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                  val lp = WindowManager.LayoutParams(
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      ViewGroup.LayoutParams.MATCH_PARENT,
+                      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                      PixelFormat.TRANSLUCENT
+                  )
+                  if (Build.VERSION.SDK_INT >= 28) {
+                      lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                  }
+                  wm?.addView(f, lp)
+                  overlay = f
+                  return f
+              }
+
+              private fun refresh() {
+                  try {
+                      val ov = ensureOverlay()
+                      val allowed = allowedPackages()
+                      val scale = Prefs.percent(this) / 100f
+                      if (allowed.isEmpty() || scale <= 1.001f) { ov.removeAllViews(); return }
+
+                      val dm = resources.displayMetrics
+                      val sw = if (ov.width > 0) ov.width else dm.widthPixels
+                      val sh = if (ov.height > 0) ov.height else dm.heightPixels
+
+                      val roots = ArrayList<AccessibilityNodeInfo>()
+                      try {
+                          for (w in windows) { w.root?.let { roots.add(it) } }
+                      } catch (_: Exception) {}
+                      if (roots.isEmpty()) rootInActiveWindow?.let { roots.add(it) }
+
+                      val all = ArrayList<Cand>()
+                      val dump = StringBuilder()
+                      for (r in roots) {
+                          val pkg = r.packageName?.toString() ?: continue
+                          if (pkg == packageName || pkg !in allowed) continue
+                          val ctx = Ctx(sw, sh, pkg)
+                          walk(r, ctx, 0)
+                          all.addAll(ctx.out)
+                          dump.append("== ").append(pkg).append("  tela ").append(sw).append("x").append(sh)
+                              .append("  candidatos=").append(ctx.out.size).append('\n').append(ctx.dump).append('\n')
+                      }
+                      if (dump.isNotEmpty()) lastDump = dump.toString()
+
+                      draw(ov, all, scale, sw, sh)
+                  } catch (e: Exception) {
+                      lastDump = "Erro: " + e
+                  }
+              }
+
+              private fun walk(n: AccessibilityNodeInfo, ctx: Ctx, depth: Int) {
+                  if (depth > 60) return
+                  if (n.isVisibleToUser) {
+                      val t = n.text?.toString()
+                      if (!t.isNullOrBlank()) {
+                          val r = Rect()
+                          n.getBoundsInScreen(r)
+                          val cls = n.className?.toString() ?: ""
+                          val clickable = n.isClickable || n.isEditable || cls.endsWith("Button") || cls.endsWith("EditText")
+                          var cand = false
+                          if (r.width() > 20 && r.height() > 10 && t.trim().length >= 2) {
+                              if (ctx.pkg == PKG_GOOGLE) {
+                                  val cy = r.centerY()
+                                  cand = !clickable && cy > ctx.sh * 0.12f && cy < ctx.sh * 0.84f
+                              } else {
+                                  if (t.length <= 50 && MARKER.containsMatchIn(t)) {
+                                      ctx.markerLeft = 8
+                                  } else if (ctx.markerLeft > 0 && !clickable && t.length >= 12) {
+                                      cand = true
+                                      ctx.markerLeft--
+                                  }
+                              }
+                          }
+                          if (cand) ctx.out.add(Cand(t, r, ctx.pkg))
+                          if (ctx.lines < 80) {
+                              ctx.lines++
+                              ctx.dump.append(if (cand) "[+] " else "[ ] ")
+                                  .append(cls.substringAfterLast('.')).append(if (clickable) " clic " else " ")
+                                  .append(r.flattenToString()).append(" \"").append(t.replace('\n', ' ').take(40)).append("\"\n")
+                          }
+                      }
+                  }
+                  for (i in 0 until n.childCount) {
+                      val c = n.getChild(i) ?: continue
+                      walk(c, ctx, depth + 1)
+                  }
+              }
+
+              private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+              private fun layoutFor(text: CharSequence, size: Float, w: Int, tp: TextPaint): StaticLayout {
+                  tp.textSize = size
+                  return StaticLayout.Builder.obtain(text, 0, text.length, tp, max(w, 1))
+                      .setAlignment(Layout.Alignment.ALIGN_CENTER).build()
+              }
+
+              private fun fit(text: CharSequence, w: Int, h: Int, tp: TextPaint): Float {
+                  var lo = 8f
+                  var hi = min(160f, max(h.toFloat(), 12f))
+                  repeat(12) {
+                      val mid = (lo + hi) / 2f
+                      if (layoutFor(text, mid, w, tp).height <= h) lo = mid else hi = mid
+                  }
+                  return max(lo, 10f)
+              }
+
+              private fun draw(ov: FrameLayout, cands: List<Cand>, scale: Float, sw: Int, sh: Int) {
+                  ov.removeAllViews()
+                  if (cands.isEmpty()) return
+                  val loc = IntArray(2)
+                  ov.getLocationOnScreen(loc)
+                  val pad = dp(8)
+                  val margin = dp(6)
+                  val gap = dp(4)
+                  val placed = ArrayList<Rect>()
+                  val tp = TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+                  for (c in cands.sortedBy { it.rect.top }) {
+                      val r = c.rect
+                      val base = fit(c.text, max(r.width() - 2 * pad, dp(40)), r.height(), tp)
+                      var size = base * scale
+                      val boxW = min(sw - 2 * margin, (r.width() * (1f + (scale - 1f) * 0.3f)).toInt()).coerceAtLeast(dp(60))
+                      val innerW = boxW - 2 * pad
+                      val maxH = (sh * 0.55f).toInt()
+                      var lay = layoutFor(c.text, size, innerW, tp)
+                      while (lay.height > maxH && size > base) {
+                          size *= 0.92f
+                          lay = layoutFor(c.text, size, innerW, tp)
+                      }
+                      val boxH = lay.height + 2 * pad + dp(2)
+
+                      val topLimit = if (c.pkg == PKG_GOOGLE) (sh * 0.12f).toInt() else margin
+                      val bottomLimit = if (c.pkg == PKG_GOOGLE) (sh * 0.84f).toInt() else sh - margin
+
+                      val left = (r.centerX() - loc[0] - boxW / 2).coerceIn(margin, max(margin, sw - boxW - margin))
+                      var top = r.centerY() - loc[1] - boxH / 2
+                      top = max(top, topLimit)
+                      var tries = 0
+                      while (tries < 12) {
+                          val box = Rect(left, top, left + boxW, top + boxH)
+                          val hit = placed.firstOrNull { Rect.intersects(it, box) } ?: break
+                          top = hit.bottom + gap
+                          tries++
+                      }
+                      if (top + boxH > bottomLimit) top = max(topLimit, bottomLimit - boxH)
+                      placed.add(Rect(left, top, left + boxW, top + boxH))
+
+                      val tv = TextView(this)
+                      tv.text = c.text
+                      tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, size)
+                      tv.setTextColor(Color.parseColor("#111111"))
+                      tv.gravity = Gravity.CENTER
+                      tv.setPadding(pad, pad, pad, pad)
+                      tv.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                      tv.background = GradientDrawable().apply {
+                          setColor(Color.parseColor("#F5FFFFFF"))
+                          cornerRadius = dp(16).toFloat()
+                      }
+                      val lp = FrameLayout.LayoutParams(boxW, boxH, Gravity.TOP or Gravity.START)
+                      lp.leftMargin = left
+                      lp.topMargin = top
+                      ov.addView(tv, lp)
+                  }
+              }
+          }
+          EOF
+      - name: Compilar
+        run: gradle assembleDebug --no-daemon
+      - name: Publicar APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk GeminiFontPlus.apk
+          gh release create "v${{ github.run_number }}" GeminiFontPlus.apk --title "Gemini Font+ v${{ github.run_number }}" --notes "APK pronto para instalar"
